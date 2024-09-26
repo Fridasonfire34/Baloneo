@@ -1,0 +1,130 @@
+#pdfContainer {
+    position: relative;
+    width: 99.5%;
+    height: 100%;
+    overflow: auto;
+    border: 3px solid black;
+    margin-top: 15px;
+    align-items: center;
+    justify-content: center;
+    margin-left: 10px;
+    margin-right: 10px;
+}
+
+#pdfViewer {
+    width: 100%;
+    height: auto;
+    overflow: auto;
+}
+
+#controls {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    margin-top: 5px;
+}
+
+#controls button,
+#controls label,
+#controls select {
+    margin-right: 10px;
+    text-align: center;
+    display: block;
+    border-radius: 2px;
+}
+
+label {
+    margin-left: 2px;
+}
+
+input[type="file"] {
+    padding: 10px;
+    font-size: 16px;
+    height: 25px;
+    cursor: pointer;
+    display: inline-block;
+    width: 400px;
+    margin: 0 10px 0 0;
+}
+
+button {
+    font-size: 14px;
+    height: 30px;
+    width: 180px;
+    cursor: pointer;
+    display: block;
+    width: auto;
+    margin: 0 10px;
+}
+
+h1 {
+    text-align: center;
+    margin-top: 20px;
+    font-family: Arial, Helvetica, sans-serif;
+    color: rgb(0, 0, 0);
+}
+
+
+h6 {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    font-weight: normal;
+    margin: 0;
+    font-family: Arial, Helvetica, sans-serif;
+}
+
+#controls select {
+    margin-left: 1px;
+}
+
+label {
+    font-family: Arial, Helvetica, sans-serif;
+    margin-left: 20px;
+}
+
+#prevNextContainer {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-grow: 1;
+}
+
+#prevPage,
+#nextPage {
+    padding: 5px;
+    cursor: pointer;
+    margin: 0 5px;
+    align-items: center;
+    border-radius: 2px;
+}
+
+.circle {
+    position: absolute;
+    width: 30px;
+    height: 30px;
+    background-color: white;
+    border: 2px solid black;
+    border-radius: 50%;
+    color: black;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 16px;
+    font-family: Arial, sans-serif;
+    font-weight: bold;
+    z-index: 10;
+    cursor: pointer;
+}
+
+.line {
+    position: absolute;
+    background-color: black;
+    z-index: 5;
+    height: 2px;
+}
+
+.selected {
+    outline: 2px solid red;
+    /* Visualización de los elementos seleccionados */
+}

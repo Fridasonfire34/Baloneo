@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Baloneo</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.14.305/pdf.min.js"></script>
+    <script>
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.14.305/pdf.worker.min.js';
+    </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.4.0/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+</head>
+
+
+<body>
+    <h1>Baloneo de dibujos</h1>
+    <h6>Compilado por Frida Gtz</h6>
+
+    <input type="file" id="fileInput" accept="application/pdf" />
+
+    <div id="controls">
+        <button id="enableNumbering">Numerar</button>
+        <button id="editNumbering">Editar</button>
+        <button id="delete">Eliminar</button>
+        <button id="reset">Eliminar todo</button>
+        <label>Tamaño de fuente:</label>
+        <select id="fontSize">
+            <option value="10">10</option>
+            <option value="12">12</option>
+            <option value="14">14</option>
+            <option value="16">16</option>
+            <option value="18">18</option>
+            <option value="20">20</option>
+            <option value="24">24</option>
+            <option value="30">30</option>
+        </select>
+        <div id="prevNextContainer">
+            <button id="prevPage">Previous</button>
+            <span id="pageInfo"></span>
+            <button id="nextPage">Next</button>
+        </div>
+        <button id="save">Guardar archivo</button>
+    </div>
+
+    <div id="pdfContainer">
+        <canvas id="pdfViewer"></canvas>
+    </div>
+    <script>
+
+        const fileInput = document.getElementById('fileInput');
+        const enableNumbering = document.getElementById('enableNumbering');
+        const resetButton = document.getElementById('reset');
+        const deleteButton = document.getElementById('delete')
+        const editButton = document.getElementById('editNumbering');
+        const prevPageButton = document.getElementById('prevPage');
+        const nextPageButton = document.getElementById('nextPage');
+        const pdfViewer = document.getElementById('pdfViewer');
+        const pdfContainer = document.getElementById('pdfContainer');
+        const pageInfo = document.getElementById('pageInfo');
+        const savefile = document.getElementById('save');
+        const fontSizeSelect = document.getElementById('fontSize');
+        const { jsPDF } = window.jspdf;
+
+        let isNumberingEnabled = false;
+        let pdfDoc = null;
+        let currentPage = 1;
+        let scale = 1;
+        let ctx = pdfViewer.getContext('2d');
+        let circles = [];
+        let lines = [];
+        let isDrawing = false;
+        let selectedCircle = null;
+        let isEditingEnabled = false;
+        let selectedElements = [];
+        let selectionRectangle = null;
+        let startX = 0;
+        let startY = 0;
+        let currentNumber = 1;
+        let selectedFontSize = parseInt(fontSizeSelect.value);
+        let pdfFileName = '';
+        let pdfFileWidthMM = 0;
+        let pdfFileHeightMM = 0;
+        let totalPages = 0;
+
+        enableNumbering.disabled = true;
+        resetButton.disabled = true;
+        editButton.disabled = true;
+        prevPageButton.disabled = true;
+        nextPageButton.disabled = true;
+        deleteButton.disabled = true;
+        savefile.disabled = true;
+
+        fontSizeSelect.addEventListener('change', (event) => {
+            selectedFontSize = parseInt(event.target.value);
+        });
+
+        deleteButton.addEventListener('click', (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+
+            if (selectedElements.length > 0) {
+                selectedElements.forEach(el => el.remove());
+                selectedElements = [];
+            }
+        });
+
+        enableNumbering.addEventListener('click', () => {
+            isNumberingEnabled = !isNumberingEnabled;
+            enableNumbering.textContent = isNumberingEnabled ? 'Finalizar' : 'Insertar';
+
+            if (isNumberingEnabled) {
+                let userInput = prompt("Número a empezar:", currentNumber);
+                if (userInput !== null) {
+                    let startNumber = parseInt(userInput, 10);
+                    if (!isNaN(startNumber)) {
+                        currentNumber = startNumber;
+                        alert(`Número establecido: ${currentNumber}`);
+                    } else {
+                        alert("Por favor, ingresa un número válido.");
+                    }
+                }
+            }
+        });
+
+        editButton.addEventListener('click', () => {
+            isEditingEnabled = !isEditingEnabled;
+            editButton.textContent = isEditingEnabled ? 'Finalizar Edicion' : 'Editar';
+
+            const circlesElements = document.querySelectorAll('.circle');
+            circlesElements.forEach(circle => {
+                if (isEditingEnabled) {
+                    circle.addEventListener('mousedown', onCircleMouseDown);
+                    circle.addEventListener('click', onCircleClick);
+                } else {
+                    circle.removeEventListener('mousedown', onCircleMouseDown);
+                    circle.removeEventListener('click', onCircleClick);
+                }
+            });
+
+            if (isEditingEnabled) {
+                document.addEventListener('mousedown', startSelection);
+                document.addEventListener('mousemove', updateSelection);
+                document.addEventListener('mouseup', endSelection);
+            } else {
+                document.removeEventListener('mousedown', startSelection);
+                document.removeEventListener('mousemove', updateSelection);
+                document.removeEventListener('mouseup', endSelection);
+            }
+        });
+
+        let selectedElement = null;
+
+        resetButton.addEventListener('click', () => {
+            circles = [];
+            lines = [];
+            const circlesElements = document.querySelectorAll('.circle');
+            circlesElements.forEach(circle => circle.remove());
+            const linesElements = document.querySelectorAll('.line');
+            linesElements.forEach(line => line.remove());
+            renderPage(currentPage);
+        });
+
+        savefile.addEventListener('click', () => {
+            html2canvas(document.getElementById('pdfContainer'), { scale: 1 }).then(canvas => {
+                const imgData = canvas.toDataURL('image/png');
+                const pdfFileWidthPT = pdfFileWidthMM * 2.83465;  // Convert from mm to points
+                const pdfFileHeightPT = pdfFileHeightMM * 2.83465;  // Convert from mm to points
+
+                const pdf = new jspdf.jsPDF({
+                    orientation: 'landscape',
+                    unit: 'pt',
+                    format: [pdfFileWidthPT, pdfFileHeightPT]
+                });
+
+                pdf.addImage(imgData, 'PNG', 0, 0, pdfFileWidthPT, pdfFileHeightPT);
+
+                pdf.save(pdfFileName);
+            });
+        });
+
+        document.getElementById("pdfViewer").addEventListener("click", function (e) {
+            console.log("Insertando número:", currentNumber);
+        });
+
+        fileInput.addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            if (file && file.type === 'application/pdf') {
+                pdfFileName = file.name;
+                pdfFileSize = file.size;
+
+                const fileReader = new FileReader();
+                fileReader.onload = function (e) {
+                    const typedarray = new Uint8Array(e.target.result);
+                    pdfjsLib.getDocument(typedarray).promise.then(pdf => {
+                        pdfDoc = pdf;
+                        totalPages = pdf.numPages;
+
+                        pdfDoc.getPage(1).then(page => {
+                            const viewport = page.getViewport({ scale: 1 });
+                            pdfFileWidthMM = viewport.width * 0.3528;
+                            pdfFileHeightMM = viewport.height * 0.3528;
+                            currentPage = 1;
+                            renderPage(currentPage);
+
+                            enableNumbering.disabled = false;
+                            resetButton.disabled = false;
+                            editButton.disabled = false;
+                            prevPageButton.disabled = false;
+                            nextPageButton.disabled = false;
+                            deleteButton.disabled = false;
+                            savefile.disabled = false;
+                        });
+                    });
+                };
+                fileReader.readAsArrayBuffer(file);
+            } else {
+                alert('Please select a valid PDF file.');
+            }
+        });
+
+        function startSelection(event) {
+            if (!isEditingEnabled) return;
+
+            if (event.target === deleteButton) return;
+
+            selectionRectangle = document.createElement('div');
+            selectionRectangle.classList.add('selection-rectangle');
+            document.body.appendChild(selectionRectangle);
+
+            startX = event.clientX;
+            startY = event.clientY;
+
+            selectionRectangle.style.left = `${startX}px`;
+            selectionRectangle.style.top = `${startY}px`;
+        }
+
+        function updateSelection(event) {
+            if (!selectionRectangle) return;
+
+            const currentX = event.clientX;
+            const currentY = event.clientY;
+
+            selectionRectangle.style.width = `${Math.abs(currentX - startX)}px`;
+            selectionRectangle.style.height = `${Math.abs(currentY - startY)}px`;
+            selectionRectangle.style.left = `${Math.min(currentX, startX)}px`;
+            selectionRectangle.style.top = `${Math.min(currentY, startY)}px`;
+        }
+
+        function endSelection(event) {
+            if (!selectionRectangle) return;
+
+            selectedElements.forEach(el => el.classList.remove('selected'));
+            selectedElements = [];
+
+            const rect = selectionRectangle.getBoundingClientRect();
+
+            document.querySelectorAll('.circle').forEach(circle => {
+                const circleRect = circle.getBoundingClientRect();
+                if (circleRect.left >= rect.left && circleRect.right <= rect.right &&
+                    circleRect.top >= rect.top && circleRect.bottom <= rect.bottom) {
+                    selectedElements.push(circle);
+                    circle.classList.add('selected');
+                }
+            });
+
+            document.querySelectorAll('.line').forEach(line => {
+                const lineRect = line.getBoundingClientRect();
+                if (lineRect.left >= rect.left && lineRect.right <= rect.right &&
+                    lineRect.top >= rect.top && lineRect.bottom <= rect.bottom) {
+                    selectedElements.push(line);
+                    line.classList.add('selected');
+                }
+            });
+
+            selectionRectangle.remove();
+            selectionRectangle = null;
+        }
+
+        function onCircleClick(event) {
+            if (!isEditingEnabled) return;
+
+            const circle = event.target;
+            if (selectedElements.includes(circle)) {
+                selectedElements = selectedElements.filter(el => el !== circle);
+                circle.classList.remove('selected');
+            } else {
+                selectedElements.push(circle);
+                circle.classList.add('selected');
+            }
+        }
+
+        const style = document.createElement('style');
+        style.textContent = `
+    .selection-rectangle {
+        position: absolute;
+        border: 1px dashed #000;
+        background-color: rgba(0, 0, 0, 0.1);
+        pointer-events: none; /* Evita interferir con otros elementos */
+    }
+    
+    .selected {
+        outline: 2px solid red; /* Visualización de los elementos seleccionados */
+    }
+`;
+        document.head.appendChild(style);
+
+        function renderPage(num) {
+            pdfDoc.getPage(num).then(page => {
+                const viewport = page.getViewport({ scale: scale });
+                pdfViewer.height = viewport.height;
+                pdfViewer.width = viewport.width;
+
+                const renderContext = {
+                    canvasContext: ctx,
+                    viewport: viewport
+                };
+                ctx.clearRect(0, 0, pdfViewer.width, pdfViewer.height);
+                page.render(renderContext);
+                drawAllElements();
+            });
+        }
+
+        prevPageButton.addEventListener('click', () => {
+            if (pdfDoc && currentPage > 1) {
+                currentPage--;
+                renderPage(currentPage);
+            }
+        });
+
+        nextPageButton.addEventListener('click', () => {
+            if (pdfDoc && currentPage < pdfDoc.numPages) {
+                currentPage++;
+                renderPage(currentPage);
+            }
+        });
+
+        pdfViewer.addEventListener('mousedown', (event) => {
+            if (isNumberingEnabled) {
+                isDrawing = true;
+                const rect = pdfViewer.getBoundingClientRect();
+                startX = event.clientX - rect.left;
+                startY = event.clientY - rect.top;
+            }
+        });
+
+        pdfViewer.addEventListener('mousemove', (event) => {
+            if (isDrawing) {
+                removeCurrentLine();
+                const rect = pdfViewer.getBoundingClientRect();
+                const endX = event.clientX - rect.left;
+                const endY = event.clientY - rect.top;
+                drawCurrentLine(startX, startY, endX, endY);
+            }
+        });
+
+        pdfViewer.addEventListener('mouseup', (event) => {
+            if (isDrawing) {
+                isDrawing = false;
+                const rect = pdfViewer.getBoundingClientRect();
+                const x = event.clientX - rect.left;
+                const y = event.clientY - rect.top;
+
+                const number = circles.length + 1;
+
+                circles.push({ originalX: x, originalY: y, number: number });
+                lines.push({ startX: startX, startY: startY, endX: x, endY: y });
+                drawLine(startX, startY, x, y);
+                drawCircle(x, y, currentNumber);
+                currentNumber++;
+            }
+        });
+
+        pdfContainer.addEventListener('click', (event) => {
+            if (isEditingEnabled && event.target.classList.contains('circle')) {
+                selectedElement = event.target;
+                currentCircle = circles.find(c => c.number === parseInt(selectedElement.textContent));
+            }
+        });
+
+        document.addEventListener('keydown', (event) => {
+            if (isEditingEnabled && event.key === 'Delete' && selectedElement) {
+                const numberToDelete = parseInt(selectedElement.textContent);
+                deleteCircleAndLine(numberToDelete);
+                selectedElement = null;
+            }
+        });
+
+        function onCircleMouseDown(event) {
+            if (!isEditingEnabled) return;
+
+            const circle = event.target;
+            selectedCircle = circle;
+
+            const offsetX = event.clientX - circle.getBoundingClientRect().left;
+            const offsetY = event.clientY - circle.getBoundingClientRect().top;
+
+            const onMouseMove = (e) => {
+                circle.style.position = 'absolute';
+                circle.style.left = `${e.clientX - offsetX}px`;
+                circle.style.top = `${e.clientY - offsetY}px`;
+
+                const circleId = parseInt(circle.textContent);
+                const line = lines[circleId - 1];
+                if (line) {
+                    const circleRect = circle.getBoundingClientRect();
+                    line.style.left = `${circleRect.left + circleRect.width / 2}px`;
+                    line.style.top = `${circleRect.top + circleRect.height}px`;
+                }
+            };
+
+            const onMouseUp = () => {
+                document.removeEventListener('mousemove', onMouseMove);
+                document.removeEventListener('mouseup', onMouseUp);
+            };
+
+            document.addEventListener('mousemove', onMouseMove);
+            document.addEventListener('mouseup', onMouseUp);
+        }
+
+        document.querySelectorAll('.circle').forEach(circle => {
+            circle.addEventListener('click', onCircleClick);
+        });
+
+        function drawCircle(x, y, number) {
+            const circle = document.createElement('div');
+            circle.classList.add('circle');
+            circle.textContent = number;
+
+            const radius = selectedFontSize === 30 ? 25 : 15;
+            circle.style.width = `${radius * 2}px`;
+            circle.style.height = `${radius * 2}px`;
+            circle.style.borderRadius = '50%';
+            circle.style.left = `${x - radius}px`;
+            circle.style.top = `${y - radius}px`;
+            circle.style.lineHeight = `${radius * 2}px`;
+            circle.style.fontSize = `${selectedFontSize}px`;
+            circle.addEventListener('mousedown', onCircleMouseDown);
+            pdfContainer.appendChild(circle);
+        }
+
+        function drawAllElements() {
+            drawExistingCircles();
+            drawExistingLines();
+        }
+
+        function drawExistingCircles() {
+            const circlesElements = document.querySelectorAll('.circle');
+            circlesElements.forEach(circle => circle.remove());
+            circles.forEach(circle => {
+                drawCircle(circle.originalX, circle.originalY, circle.number);
+            });
+        }
+
+        function drawLine(startX, startY, endX, endY) {
+            const line = document.createElement('div');
+            line.classList.add('line');
+            const distance = Math.sqrt((endX - startX) ** 2 + (endY - startY) ** 2);
+            const angle = Math.atan2(endY - startY, endX - startX) * 180 / Math.PI;
+            line.style.width = `${distance}px`;
+            line.style.transformOrigin = '0 0';
+            line.style.transform = `rotate(${angle}deg)`;
+            line.style.left = `${startX}px`;
+            line.style.top = `${startY}px`;
+
+            pdfContainer.appendChild(line);
+        }
+
+        function drawExistingLines() {
+            lines.forEach(line => {
+                drawLine(line.startX, line.startY, line.endX, line.endY);
+            });
+        }
+
+        function removeCurrentLine() {
+            const currentLines = document.querySelectorAll('.current-line');
+            currentLines.forEach(line => line.remove());
+        }
+
+        function drawCurrentLine(startX, startY, endX, endY) {
+            const line = document.createElement('div');
+            line.classList.add('current-line');
+            const distance = Math.sqrt((endX - startX) ** 2 + (endY - startY) ** 2);
+            const angle = Math.atan2(endY - startY, endX - startX) * 180 / Math.PI;
+            line.style.width = `${distance}px`;
+            line.style.transformOrigin = '0 0';
+            line.style.transform = `rotate(${angle}deg)`;
+            line.style.left = `${startX}px`;
+            line.style.top = `${startY}px`;
+            pdfContainer.appendChild(line);
+        }
+
+        function onCircleMouseDown(event) {
+            if (!isEditingEnabled) return;
+
+            const circle = event.target;
+            currentCircle = circles.find(c => c.number === parseInt(circle.textContent));
+            const rect = pdfViewer.getBoundingClientRect();
+            let offsetX = event.clientX - rect.left - circle.offsetLeft;
+            let offsetY = event.clientY - rect.top - circle.offsetTop;
+
+            function onMouseMove(e) {
+                const newX = e.clientX - rect.left - offsetX;
+                const newY = e.clientY - rect.top - offsetY;
+
+                circle.style.left = `${newX}px`;
+                circle.style.top = `${newY}px`;
+
+                currentCircle.originalX = newX + 15;
+                currentCircle.originalY = newY + 15;
+
+                const line = lines[currentCircle.number - 1];
+                if (line) {
+                    updateLine(currentCircle.number, currentCircle.originalX, currentCircle.originalY);
+                }
+            }
+
+            function onMouseUp() {
+                document.removeEventListener('mousemove', onMouseMove);
+                document.removeEventListener('mouseup', onMouseUp);
+            }
+
+            document.addEventListener('mousemove', onMouseMove);
+            document.addEventListener('mouseup', onMouseUp);
+        }
+        function updateLine(number, newEndX, newEndY) {
+            const line = lines[number - 1];
+            line.endX = newEndX;
+            line.endY = newEndY;
+
+            const lineElement = document.querySelectorAll('.line')[number - 1];
+            lineElement.style.width = `${Math.sqrt((newEndX - line.startX) ** 2 + (newEndY - line.startY) ** 2)}px`;
+            lineElement.style.transform = `rotate(${Math.atan2(newEndY - line.startY, newEndX - line.startX) * 180 / Math.PI}deg)`;
+            lineElement.style.left = `${line.startX}px`;
+            lineElement.style.top = `${line.startY}px`;
+        }
+    </script>
+</body>
+
+</html>
