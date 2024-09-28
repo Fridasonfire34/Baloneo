@@ -83,8 +83,6 @@
             let isEditingEnabled = false;
             let selectedElements = [];
             let selectionRectangle = null;
-            let startX = 0;
-            let startY = 0;
             let currentNumber = 1;
             let selectedFontSize = parseInt(fontSizeSelect.value);
             let pdfFileName = '';
@@ -99,6 +97,8 @@
             let deletedCircles = [];
             let lastInsertedX, lastInsertedY;
             let currentNumberToInsert;
+            let startX, startY;
+            let currentCircle = null;
 
             enableNumbering.disabled = true;
             resetButton.disabled = true;
@@ -290,6 +290,7 @@
             function startSelection(event) {
                 if (!isEditingEnabled) return;
 
+                // Evita seleccionar si se hace clic en el botón de eliminar
                 if (event.target === deleteButton) return;
 
                 selectionRectangle = document.createElement('div');
@@ -318,11 +319,13 @@
             function endSelection(event) {
                 if (!selectionRectangle) return;
 
+                // Limpiar selecciones previas
                 selectedElements.forEach(el => el.classList.remove('selected'));
                 selectedElements = [];
 
                 const rect = selectionRectangle.getBoundingClientRect();
 
+                // Seleccionar números
                 document.querySelectorAll('.circle').forEach(circle => {
                     const circleRect = circle.getBoundingClientRect();
                     if (circleRect.left >= rect.left && circleRect.right <= rect.right &&
@@ -336,14 +339,19 @@
                     const lineRect = line.getBoundingClientRect();
                     if (lineRect.left >= rect.left && lineRect.right <= rect.right &&
                         lineRect.top >= rect.top && lineRect.bottom <= rect.bottom) {
-                        selectedElements.push(line);
-                        line.classList.add('selected');
+                        // Solo seleccionar la línea si no hay círculos seleccionados
+                        if (selectedElements.length === 0) {
+                            selectedElements.push(line);
+                            line.classList.add('selected');
+                        }
                     }
                 });
 
                 selectionRectangle.remove();
                 selectionRectangle = null;
             }
+
+
 
             function onCircleClick(event) {
                 if (!isEditingEnabled) return;
@@ -508,25 +516,24 @@
             function deleteSelectedElements() {
                 if (selectedElements.length > 0) {
                     selectedElements.forEach(el => {
-                        const index = insertedCircles.indexOf(el);
-                        if (index > -1) {
-                            insertedCircles.splice(index, 1);
+                        if (el.classList.contains('circle')) {
+                            // Si es un círculo, eliminar la línea asociada si existe
                             const number = parseInt(el.textContent, 10);
-                            deletedNumbers.push(number);
-
-                            lines.forEach(line => {
-                                if (line.startCircle === number || line.endCircle === number) {
-                                    const lineElement = document.querySelector(`.line[data-start="${line.startX},${line.startY}"][data-end="${line.endX},${line.endY}"]`);
-                                    if (lineElement) {
-                                        lineElement.remove();
-                                    }
+                            const line = lines[number - 1];
+                            if (line) {
+                                const lineElement = document.querySelector(`.line[data-start="${line.startX},${line.startY}"][data-end="${line.endX},${line.endY}"]`);
+                                if (lineElement) {
+                                    lineElement.remove(); // Eliminar la línea
                                 }
-                            });
+                            }
+                            el.remove(); // Eliminar el círculo
+                        } else if (el.classList.contains('line')) {
+                            // Si es una línea, solo eliminarla
+                            el.remove();
                         }
-                        el.remove();
                     });
-                    selectedElements = [];
-                    toggleUndoRedoButtons();
+                    selectedElements = []; // Limpiar selecciones después de eliminar
+                    toggleUndoRedoButtons(); // Si tienes esta función para habilitar/deshabilitar botones
                 }
             }
 
@@ -615,6 +622,10 @@
 
                 const circle = event.target;
                 currentCircle = circles.find(c => c.number === parseInt(circle.textContent));
+
+                // Asegúrate de que currentCircle no sea undefined
+                if (!currentCircle) return;
+
                 const rect = pdfViewer.getBoundingClientRect();
                 let offsetX = event.clientX - rect.left - circle.offsetLeft;
                 let offsetY = event.clientY - rect.top - circle.offsetTop;
@@ -626,12 +637,15 @@
                     circle.style.left = `${newX}px`;
                     circle.style.top = `${newY}px`;
 
-                    currentCircle.originalX = newX + 15;
-                    currentCircle.originalY = newY + 15;
+                    // Verifica si currentCircle está definido antes de asignar sus propiedades
+                    if (currentCircle) {
+                        currentCircle.originalX = newX + 15; // Actualizar la posición
+                        currentCircle.originalY = newY + 15;
 
-                    const line = lines[currentCircle.number - 1];
-                    if (line) {
-                        updateLine(currentCircle.number, currentCircle.originalX, currentCircle.originalY);
+                        const line = lines[currentCircle.number - 1]; // Asegúrate de que el índice sea correcto
+                        if (line) {
+                            updateLine(currentCircle.number, currentCircle.originalX, currentCircle.originalY);
+                        }
                     }
                 }
 
@@ -643,17 +657,25 @@
                 document.addEventListener('mousemove', onMouseMove);
                 document.addEventListener('mouseup', onMouseUp);
             }
+
+
             function updateLine(number, newEndX, newEndY) {
-                const line = lines[number - 1];
+                const line = lines[number - 1]; // Asegúrate de que el índice sea correcto
+                if (!line) return; // Asegúrate de que la línea exista
+
+                // Encuentra el elemento de línea en el DOM
+                const lineElement = document.querySelectorAll('.line')[number - 1];
+                if (!lineElement) return; // Asegúrate de que el elemento de línea exista
+
                 line.endX = newEndX;
                 line.endY = newEndY;
 
-                const lineElement = document.querySelectorAll('.line')[number - 1];
                 lineElement.style.width = `${Math.sqrt((newEndX - line.startX) ** 2 + (newEndY - line.startY) ** 2)}px`;
                 lineElement.style.transform = `rotate(${Math.atan2(newEndY - line.startY, newEndX - line.startX) * 180 / Math.PI}deg)`;
                 lineElement.style.left = `${line.startX}px`;
                 lineElement.style.top = `${line.startY}px`;
             }
+
         });
     </script>
 </body>

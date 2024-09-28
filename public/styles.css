@@ -129,7 +129,19 @@ input {
     height: 2px;
 }
 
-.selected {
-    outline: 2px solid red;
-    /* Visualización de los elementos seleccionados */
+.selection-rectangle {
+    position: absolute;
+    border: 1px dashed blue;
+    background-color: rgba(0, 0, 255, 0.2);
+    pointer-events: none;
+}
+
+.circle.selected {
+    background-color: yellow;
+    /* Cambia el color según lo que prefieras */
+}
+
+.line.selected {
+    background-color: red;
+    /* Color para las líneas seleccionadas */
 }
