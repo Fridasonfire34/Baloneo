@@ -54,7 +54,7 @@ button {
     cursor: pointer;
     display: block;
     width: auto;
-    margin: 0 10px;
+    margin: 0 9px;
 }
 
 h1 {
@@ -80,7 +80,12 @@ h6 {
 
 label {
     font-family: Arial, Helvetica, sans-serif;
-    margin-left: 20px;
+    margin-left: 10px;
+}
+
+input {
+    width: 35px;
+    margin-left: 1px;
 }
 
 #prevNextContainer {
