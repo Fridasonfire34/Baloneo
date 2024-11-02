@@ -184,22 +184,40 @@
                 }
             });
 
-            savefile.addEventListener('click', () => {
-                html2canvas(document.getElementById('pdfContainer'), { scale: 1 }).then(canvas => {
-                    const imgData = canvas.toDataURL('image/png');
-                    const pdfFileWidthPT = pdfFileWidthMM * 2.83465;
-                    const pdfFileHeightPT = pdfFileHeightMM * 2.83465;
+            function forceBlackPixels(canvas) {
+                const ctx = canvas.getContext('2d');
+                const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                const data = imgData.data;
 
-                    const pdf = new jspdf.jsPDF({
-                        orientation: 'landscape',
-                        unit: 'pt',
-                        format: [pdfFileWidthPT, pdfFileHeightPT]
-                    });
+                for (let i = 0; i < data.length; i += 4) {
+                    // Comprobar si el píxel es lo suficientemente oscuro
+                    if (data[i] < 100 && data[i + 1] < 100 && data[i + 2] < 100) { // Ajusta el umbral según sea necesario
+                        data[i] = 0;     // rojo
+                        data[i + 1] = 0; // verde
+                        data[i + 2] = 0; // azul
+                        data[i + 3] = 255; // alpha (completamente opaco)
+                    }
+                }
 
-                    pdf.addImage(imgData, 'PNG', 0, 0, pdfFileWidthPT, pdfFileHeightPT);
+                ctx.putImageData(imgData, 0, 0);
+            }
+            savefile.addEventListener('click', async () => {
+                const pdfFileWidthPT = pdfFileWidthMM * 2.83465;
+                const pdfFileHeightPT = pdfFileHeightMM * 2.83465;
 
-                    pdf.save(pdfFileName);
+                const pdf = new jspdf.jsPDF({
+                    orientation: 'landscape',
+                    unit: 'pt',
+                    format: [pdfFileWidthPT, pdfFileHeightPT]
                 });
+
+                // Captura el contenedor HTML
+                const canvas = await html2canvas(document.getElementById('pdfContainer'), { scale: 5 });
+                forceBlackPixels(canvas);
+                const imgData = canvas.toDataURL('image/jpeg', 1);
+
+                pdf.addImage(imgData, 'JPEG', 0, 0, pdfFileWidthPT, pdfFileHeightPT);
+                pdf.save(pdfFileName);
             });
 
             document.addEventListener('keydown', (event) => {
@@ -237,7 +255,8 @@
                             totalPages = pdf.numPages;
 
                             pdfDoc.getPage(1).then(page => {
-                                const viewport = page.getViewport({ scale: 1 });
+                                const scale = 4;
+                                const viewport = page.getViewport({ scale: scale });
                                 pdfFileWidthMM = viewport.width * 0.3528;
                                 pdfFileHeightMM = viewport.height * 0.3528;
                                 currentPage = 1;
@@ -294,8 +313,8 @@
                 selectionRectangle.classList.add('selection-rectangle');
                 document.body.appendChild(selectionRectangle);
 
-                startX = event.clientX;
-                startY = event.clientY;
+                startX = event.clientX + window.scrollX; // Añadir desplazamiento horizontal
+                startY = event.clientY + window.scrollY; // Añadir desplazamiento vertical
 
                 selectionRectangle.style.left = `${startX}px`;
                 selectionRectangle.style.top = `${startY}px`;
@@ -304,14 +323,15 @@
             function updateSelection(event) {
                 if (!selectionRectangle) return;
 
-                const currentX = event.clientX;
-                const currentY = event.clientY;
+                const currentX = event.clientX + window.scrollX; // Añadir desplazamiento horizontal
+                const currentY = event.clientY + window.scrollY; // Añadir desplazamiento vertical
 
                 selectionRectangle.style.width = `${Math.abs(currentX - startX)}px`;
                 selectionRectangle.style.height = `${Math.abs(currentY - startY)}px`;
                 selectionRectangle.style.left = `${Math.min(currentX, startX)}px`;
                 selectionRectangle.style.top = `${Math.min(currentY, startY)}px`;
             }
+
 
             function endSelection(event) {
                 if (!selectionRectangle) return;
@@ -347,8 +367,6 @@
                 selectionRectangle.remove();
                 selectionRectangle = null;
             }
-
-
 
             function onCircleClick(event) {
                 if (!isEditingEnabled) return;
@@ -545,13 +563,13 @@
                 circle.classList.add('circle');
                 circle.textContent = number;
 
-                const radius = selectedFontSize === 8 ? 8 : 10;
+                const radius = selectedFontSize === 8 ? 10 : 10;
                 circle.style.width = `${radius * 2}px`;
                 circle.style.height = `${radius * 2}px`;
                 circle.style.borderRadius = '50%';
                 circle.style.left = `${x - radius}px`;
                 circle.style.top = `${y - radius}px`;
-                circle.style.lineHeight = `${radius * 2}px`;
+                circle.style.lineHeight = `${radius * 5}px`;
                 circle.style.fontSize = `${selectedFontSize}px`;
                 circle.addEventListener('mousedown', onCircleMouseDown);
                 pdfContainer.appendChild(circle);
