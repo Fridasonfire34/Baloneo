@@ -67,6 +67,8 @@
             const fontSizeSelect = document.getElementById('fontSize');
             const numberButton = document.getElementById('nextNumber')
             const { jsPDF } = window.jspdf;
+            const insertedElements = [];
+            const scaleFactor = 5;
 
             let isNumberingEnabled = false;
             let pdfDoc = null;
@@ -190,7 +192,6 @@
                 const data = imgData.data;
 
                 for (let i = 0; i < data.length; i += 4) {
-                    // Comprobar si el píxel es lo suficientemente oscuro
                     if (data[i] < 100 && data[i + 1] < 100 && data[i + 2] < 100) { // Ajusta el umbral según sea necesario
                         data[i] = 0;     // rojo
                         data[i + 1] = 0; // verde
@@ -202,6 +203,12 @@
                 ctx.putImageData(imgData, 0, 0);
             }
             savefile.addEventListener('click', async () => {
+                const scaleFactor = 5; // Factor de escala usado en html2canvas
+
+                const container = document.getElementById('pdfContainer');
+                const containerWidth = container.offsetWidth;
+                const containerHeight = container.offsetHeight;
+
                 const pdfFileWidthPT = pdfFileWidthMM * 2.83465;
                 const pdfFileHeightPT = pdfFileHeightMM * 2.83465;
 
@@ -211,11 +218,73 @@
                     format: [pdfFileWidthPT, pdfFileHeightPT]
                 });
 
-                const canvas = await html2canvas(document.getElementById('pdfContainer'), { scale: 5 });
+                const canvas = await html2canvas(container, { scale: scaleFactor });
                 forceBlackPixels(canvas);
                 const imgData = canvas.toDataURL('image/jpeg', 1);
 
                 pdf.addImage(imgData, 'JPEG', 0, 0, pdfFileWidthPT, pdfFileHeightPT);
+
+                const moveDistance = 2 * scaleFactor; // Desplazamiento de 2 unidades multiplicadas por la escala (5)
+
+                const adjustedElements = insertedElements.map(element => {
+                    if (element.type === 'circle') {
+                        return [
+                            { ...element, x: element.x, y: element.y - moveDistance },
+                            { ...element, x: element.x, y: element.y + moveDistance },
+                            { ...element, x: element.x - moveDistance, y: element.y },
+                            { ...element, x: element.x + moveDistance, y: element.y },
+                            { ...element, x: element.x - moveDistance, y: element.y - moveDistance },
+                            { ...element, x: element.x + moveDistance, y: element.y - moveDistance },
+                            { ...element, x: element.x - moveDistance, y: element.y + moveDistance },
+                            { ...element, x: element.x + moveDistance, y: element.y + moveDistance },
+                        ];
+                    } else if (element.type === 'line') {
+                        return [
+                            {
+                                ...element,
+                                startX: element.startX, startY: element.startY - moveDistance,
+                                endX: element.endX, endY: element.endY - moveDistance,
+                            },
+                            {
+                                ...element,
+                                startX: element.startX, startY: element.startY + moveDistance,
+                                endX: element.endX, endY: element.endY + moveDistance,
+                            },
+                            {
+                                ...element,
+                                startX: element.startX - moveDistance, startY: element.startY,
+                                endX: element.endX - moveDistance, endY: element.endY,
+                            },
+                            {
+                                ...element,
+                                startX: element.startX + moveDistance, startY: element.startY,
+                                endX: element.endX + moveDistance, endY: element.endY,
+                            },
+                            {
+                                ...element,
+                                startX: element.startX - moveDistance, startY: element.startY - moveDistance,
+                                endX: element.endX - moveDistance, endY: element.endY - moveDistance,
+                            },
+                            {
+                                ...element,
+                                startX: element.startX + moveDistance, startY: element.startY - moveDistance,
+                                endX: element.endX + moveDistance, endY: element.endY - moveDistance,
+                            },
+                            {
+                                ...element,
+                                startX: element.startX - moveDistance, startY: element.startY + moveDistance,
+                                endX: element.endX - moveDistance, endY: element.endY + moveDistance,
+                            },
+                            {
+                                ...element,
+                                startX: element.startX + moveDistance, startY: element.startY + moveDistance,
+                                endX: element.endX + moveDistance, endY: element.endY + moveDistance,
+                            },
+                        ];
+                    }
+                    return element;
+                }).flat(); // Aplanar la matriz de elementos para tener un solo arreglo de elementos ajustados
+
                 pdf.save(pdfFileName);
             });
 
@@ -254,7 +323,7 @@
                             totalPages = pdf.numPages;
 
                             pdfDoc.getPage(1).then(page => {
-                                const scale = 4;
+                                const scale = 5;
                                 const viewport = page.getViewport({ scale: scale });
                                 pdfFileWidthMM = viewport.width * 0.3528;
                                 pdfFileHeightMM = viewport.height * 0.3528;
@@ -305,7 +374,6 @@
             function startSelection(event) {
                 if (!isEditingEnabled) return;
 
-                // Evita seleccionar si se hace clic en el botón de eliminar
                 if (event.target === deleteButton) return;
 
                 selectionRectangle = document.createElement('div');
@@ -335,13 +403,11 @@
             function endSelection(event) {
                 if (!selectionRectangle) return;
 
-                // Limpiar selecciones previas
                 selectedElements.forEach(el => el.classList.remove('selected'));
                 selectedElements = [];
 
                 const rect = selectionRectangle.getBoundingClientRect();
 
-                // Seleccionar números
                 document.querySelectorAll('.circle').forEach(circle => {
                     const circleRect = circle.getBoundingClientRect();
                     if (circleRect.left >= rect.left && circleRect.right <= rect.right &&
@@ -355,7 +421,6 @@
                     const lineRect = line.getBoundingClientRect();
                     if (lineRect.left >= rect.left && lineRect.right <= rect.right &&
                         lineRect.top >= rect.top && lineRect.bottom <= rect.bottom) {
-                        // Solo seleccionar la línea si no hay círculos seleccionados
                         if (selectedElements.length === 0) {
                             selectedElements.push(line);
                             line.classList.add('selected');
@@ -499,7 +564,6 @@
                 const circle = event.target;
                 currentCircle = circles.find(c => c.number === parseInt(circle.textContent));
 
-                // Asegúrate de que currentCircle no sea undefined
                 if (!currentCircle) return;
 
                 const rect = pdfViewer.getBoundingClientRect();
@@ -513,7 +577,6 @@
                     circle.style.left = `${newX}px`;
                     circle.style.top = `${newY}px`;
 
-                    // Actualiza las posiciones de los círculos y las líneas en la memoria
                     if (currentCircle) {
                         currentCircle.originalX = newX + 15; // Actualizar la posición
                         currentCircle.originalY = newY + 15;
@@ -543,7 +606,6 @@
                 if (selectedElements.length > 0) {
                     selectedElements.forEach(el => {
                         if (el.classList.contains('circle')) {
-                            // Si es un círculo, eliminar la línea asociada si existe
                             const number = parseInt(el.textContent, 10);
                             const line = lines[number - 1];
                             if (line) {
@@ -570,6 +632,10 @@
 
                 if (number === undefined) return;
 
+                // Escala de 5
+                const scaleFactor = 5;
+                const moveDistance = 2 * scaleFactor; // Desplazamiento de 2 unidades circulares multiplicado por la escala
+
                 const circle = document.createElement('div');
                 circle.classList.add('circle');
                 circle.textContent = number;
@@ -578,14 +644,20 @@
                 circle.style.width = `${radius * 2}px`;
                 circle.style.height = `${radius * 2}px`;
                 circle.style.borderRadius = '50%';
-                circle.style.left = `${x - radius}px`;
-                circle.style.top = `${y - radius}px`;
+
+                // Aplicar el desplazamiento en las 8 direcciones alrededor del círculo
+                const adjustedX = x + moveDistance;
+                const adjustedY = y + moveDistance;
+
+                circle.style.left = `${adjustedX - radius}px`;
+                circle.style.top = `${adjustedY - radius}px`;
                 circle.style.lineHeight = `${radius * 5}px`;
                 circle.style.fontSize = `${selectedFontSize}px`;
+
                 circle.addEventListener('mousedown', onCircleMouseDown);
                 pdfContainer.appendChild(circle);
 
-                insertedCircles.push({ element: circle, number: number, x: x, y: y });
+                insertedCircles.push({ element: circle, number: number, x: adjustedX, y: adjustedY });
                 toggleUndoRedoButtons();
             }
 
@@ -606,17 +678,33 @@
                 if (!allowInsert) {
                     return;
                 }
+
+                // Escala de 5
+                const scaleFactor = 5;
+                const moveDistance = 2 * scaleFactor; // Desplazamiento de 2 unidades circulares multiplicado por la escala
+
                 const line = document.createElement('div');
                 line.classList.add('line');
                 const distance = Math.sqrt((endX - startX) ** 2 + (endY - startY) ** 2);
                 const angle = Math.atan2(endY - startY, endX - startX) * 180 / Math.PI;
+
+                // Ajustamos las coordenadas de inicio y fin de la línea
+                const adjustedStartX = startX + moveDistance;
+                const adjustedStartY = startY + moveDistance;
+                const adjustedEndX = endX + moveDistance;
+                const adjustedEndY = endY + moveDistance;
+
                 line.style.width = `${distance}px`;
                 line.style.transformOrigin = '0 0';
                 line.style.transform = `rotate(${angle}deg)`;
-                line.style.left = `${startX}px`;
-                line.style.top = `${startY}px`;
+                line.style.left = `${adjustedStartX}px`;
+                line.style.top = `${adjustedStartY}px`;
 
                 pdfContainer.appendChild(line);
+            }
+
+            function getInsertedElements() {
+                return insertedElements;
             }
 
             function drawExistingLines() {
@@ -649,7 +737,6 @@
                 const circle = event.target;
                 currentCircle = circles.find(c => c.number === parseInt(circle.textContent));
 
-                // Asegúrate de que currentCircle no sea undefined
                 if (!currentCircle) return;
 
                 const rect = pdfViewer.getBoundingClientRect();
@@ -663,7 +750,6 @@
                     circle.style.left = `${newX}px`;
                     circle.style.top = `${newY}px`;
 
-                    // Verifica si currentCircle está definido antes de asignar sus propiedades
                     if (currentCircle) {
                         currentCircle.originalX = newX + 15; // Actualizar la posición
                         currentCircle.originalY = newY + 15;
@@ -689,7 +775,6 @@
                 const line = lines[number - 1]; // Asegúrate de que el índice sea correcto
                 if (!line) return; // Asegúrate de que la línea exista
 
-                // Encuentra el elemento de línea en el DOM
                 const lineElement = document.querySelectorAll('.line')[number - 1];
                 if (!lineElement) return; // Asegúrate de que el elemento de línea exista
 
