@@ -34,6 +34,12 @@
             <option value="14">14</option>
             <option value="18">16</option>
         </select>
+        <label>Tamaño del circulo:</label>
+        <select id="Radius">
+            <option value="7">7</option>
+            <option value="8">8</option>
+            <option value="10">10</option>
+        </select>
         <button id="undo">Deshacer</button>
         <button id="redo">Rehacer</button>
         <button id="nextNumber">Ingresar cota</button>
@@ -61,6 +67,7 @@
             const savefile = document.getElementById('save');
             const fontSizeSelect = document.getElementById('fontSize');
             const numberButton = document.getElementById('nextNumber')
+            const radiusSelect = document.getElementById('Radius');
             const { jsPDF } = window.jspdf;
             const insertedElements = [];
             const scaleFactor = 5;
@@ -422,19 +429,21 @@
                 circle.classList.add('circle');
                 circle.textContent = number;
 
-                const radius = selectedFontSize === 8 ? 7 : 7;
-                circle.style.width = `${radius * 2}px`;
-                circle.style.height = `${radius * 2}px`;
+                const selectedRadius = parseInt(radiusSelect.value, 10);
+
+                // const radius = selectedFontSize === 8 ? 7 : 7;
+                circle.style.width = `${selectedRadius * 2}px`;
+                circle.style.height = `${selectedRadius * 2}px`;
                 circle.style.borderRadius = '50%';
 
                 const adjustedX = x + moveDistance;
                 const adjustedY = y + moveDistance;
 
-                circle.style.left = `${x - radius}px`;
-                circle.style.top = `${y - radius}px`;
+                circle.style.left = `${x - selectedRadius}px`;
+                circle.style.top = `${y - selectedRadius}px`;
                 circle.style.position = 'absolute';
-                circle.style.lineHeight = `${radius * 2}px`;
-                circle.style.fontSize = `${selectedFontSize}px`;
+                circle.style.lineHeight = `${selectedRadius * 2}px`;
+                circle.style.fontSize = `${selectedRadius}px`;
                 circle.setAttribute('data-border', '');
 
                 container.appendChild(circle);
@@ -530,8 +539,9 @@
                 lineElement.style.transform = `rotate(${angle}deg)`;
                 lineElement.style.left = `${startX}px`;
                 lineElement.style.top = `${startY}px`;
-                lineElement.style.bottom = '';
-                lineElement.style.right = '';
+                lineElement.style.position = 'absolute';
+                lineElement.dataset.startX = startX;
+                lineElement.dataset.startY = startY;
 
                 lineElement.addEventListener('mousedown', onLineMouseDown);
             }
@@ -548,27 +558,36 @@
                 const line = event.target;
                 const container = line.parentElement;
 
-                const startX = line.getBoundingClientRect().left + container.scrollLeft;
-                const startY = line.getBoundingClientRect().top + container.scrollTop;
+                const startX = parseFloat(line.dataset.startX);
+                const startY = parseFloat(line.dataset.startY);
 
-                const endX = startX + parseFloat(line.style.width) * Math.cos(parseFloat(line.style.transform.replace('rotate(', '').replace('deg)', '')) * Math.PI / 180);
-                const endY = startY + parseFloat(line.style.width) * Math.sin(parseFloat(line.style.transform.replace('rotate(', '').replace('deg)', '')) * Math.PI / 180);
+                let offsetX = event.clientX - (startX + parseFloat(line.style.width) * Math.cos(parseFloat(line.style.transform.replace('rotate(', '').replace('deg)', '')) * Math.PI / 180));
+                let offsetY = event.clientY - (startY + parseFloat(line.style.width) * Math.sin(parseFloat(line.style.transform.replace('rotate(', '').replace('deg)', '')) * Math.PI / 180));
 
-                let offsetX = event.clientX - endX;
-                let offsetY = event.clientY - endY;
+                let isDragging = false;
+                const dragThreshold = 5; // Umbral de píxeles para iniciar el arrastre
 
                 function onMouseMove(event) {
-                    const newEndX = event.clientX - container.getBoundingClientRect().left;
-                    const newEndY = event.clientY - container.getBoundingClientRect().top;
+                    const dx = event.clientX - startX - offsetX;
+                    const dy = event.clientY - startY - offsetY;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
 
-                    const dx = newEndX - startX;
-                    const dy = newEndY - startY;
-                    const newDistance = Math.sqrt(dx * dx + dy * dy);
-                    const angleRad = Math.atan2(dy, dx);
-                    const newAngle = angleRad * 180 / Math.PI;
+                    if (!isDragging && distance > dragThreshold) {
+                        isDragging = true;
+                    }
 
-                    line.style.width = `${newDistance}px`;  // Actualizar la longitud de la línea
-                    line.style.transform = `rotate(${newAngle}deg)`;  // Actualizar el ángulo de la línea
+                    if (isDragging) {
+                        const newEndX = event.clientX - container.getBoundingClientRect().left - offsetX;
+                        const newEndY = event.clientY - container.getBoundingClientRect().top - offsetY;
+
+                        const dx = newEndX - startX;
+                        const dy = newEndY - startY;
+                        const newDistance = Math.sqrt(dx * dx + dy * dy);
+                        const newAngle = Math.atan2(dy, dx) * 180 / Math.PI;
+
+                        line.style.width = `${newDistance}px`;
+                        line.style.transform = `rotate(${newAngle}deg)`;
+                    }
                 }
 
                 function onMouseUp() {
@@ -579,6 +598,8 @@
                 document.addEventListener('mousemove', onMouseMove);
                 document.addEventListener('mouseup', onMouseUp);
             }
+
+
 
             function onCircleMouseDown(event) {
                 if (!isEditingEnabled) return;
