@@ -178,36 +178,43 @@
                 const scaleFactor = 5;
                 const containers = document.querySelectorAll('.page-container');
 
-                const pdfFileWidthMM = 863.6;
-                const pdfFileHeightMM = 558.8;
-                const pdfFileWidthPT = pdfFileWidthMM * 2.83465;
-                const pdfFileHeightPT = pdfFileHeightMM * 2.83465;
+                const pdfFileName = window.pdfFileName ? window.pdfFileName.replace('.pdf', '_modified.pdf') : 'generated_modified.pdf';
 
-                const pdfFileName = window.pdfFileName ? window.pdfFileName.replace('.pdf', '.pdf') : 'generated_modified.pdf';
-
-                const pdf = new jspdf.jsPDF({
-                    orientation: 'landscape',
-                    unit: 'pt',
-                    format: [pdfFileWidthPT, pdfFileHeightPT],
-                });
+                let pdf;
 
                 try {
                     for (let i = 0; i < containers.length; i++) {
                         const container = containers[i];
 
+                        const pageSize = pageSizes[i];
+                        if (!pageSize) {
+                            console.error(`No se encontró el tamaño para la página ${i + 1}`);
+                            continue;
+                        }
+
+                        const pageWidth = pageSize.width;
+                        const pageHeight = pageSize.height;
+
                         const canvas = await html2canvas(container, {
                             scale: scaleFactor,
-                            width: pdfFileWidthPT,
-                            height: pdfFileHeightPT
+                            width: pageWidth,
+                            height: pageHeight
                         });
 
                         const imgData = canvas.toDataURL('image/jpeg', 1);
 
-                        if (i > 0) {
-                            pdf.addPage([pdfFileWidthPT, pdfFileHeightPT]);
+                        if (i === 0) {
+                            pdf = new jspdf.jsPDF({
+                                orientation: pageWidth > pageHeight ? 'landscape' : 'portrait',
+                                unit: 'pt',
+                                format: [pageWidth, pageHeight],
+                            });
+                        } else {
+                            pdf.addPage([pageWidth, pageHeight]);
+                            pdf.setPage(i + 1);
                         }
 
-                        pdf.addImage(imgData, 'JPEG', 0, 0, pdfFileWidthPT, pdfFileHeightPT);
+                        pdf.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight);
                     }
 
                     pdf.save(pdfFileName);
@@ -215,6 +222,9 @@
                     console.error('Error generating PDF:', error);
                 }
             });
+
+
+
 
             document.addEventListener('keydown', (event) => {
                 if (event.key === 'Backspace' || event.key === 'Delete') {
@@ -249,6 +259,7 @@
 
                             pdfContainer.innerHTML = '';
                             pageContainers = [];
+                            pageSizes = [];
 
                             for (let i = 1; i <= totalPages; i++) {
                                 const pageContainer = document.createElement('div');
@@ -275,6 +286,43 @@
                     alert('Please select a valid PDF file.');
                 }
             });
+
+            function renderPage(num) {
+                if (!pdfDoc) return;
+
+                pdfDoc.getPage(num).then(page => {
+                    const viewport = page.getViewport({ scale: scale });
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+                    canvas.height = viewport.height;
+                    canvas.width = viewport.width;
+
+                    const renderContext = {
+                        canvasContext: ctx,
+                        viewport: viewport
+                    };
+
+                    const pageContainer = pageContainers[num];
+                    if (pageContainer) {
+                        pageContainer.innerHTML = '';
+                        pageContainer.appendChild(canvas);
+                        page.render(renderContext).promise.then(() => {
+                            pageSizes[num - 1] = {
+                                width: canvas.width,
+                                height: canvas.height
+                            };
+
+                            console.log(`Página ${num}: Ancho - ${canvas.width}, Alto - ${canvas.height}`);
+                        });
+
+                        pageContainer.removeEventListener('mousedown', onPageMouseDown);
+                        pageContainer.removeEventListener('click', onPageClick);
+
+                        pageContainer.addEventListener('mousedown', onPageMouseDown);
+                        pageContainer.addEventListener('click', onPageClick);
+                    }
+                });
+            }
 
             function unselectElements() {
                 selectedElements.forEach(element => {
@@ -306,36 +354,6 @@
                 } else {
                     alert("No hay más números por rehacer");
                 }
-            }
-
-            function renderPage(num) {
-                if (!pdfDoc) return;
-
-                pdfDoc.getPage(num).then(page => {
-                    const viewport = page.getViewport({ scale: scale });
-                    const canvas = document.createElement('canvas');
-                    const ctx = canvas.getContext('2d');
-                    canvas.height = viewport.height;
-                    canvas.width = viewport.width;
-
-                    const renderContext = {
-                        canvasContext: ctx,
-                        viewport: viewport
-                    };
-
-                    const pageContainer = pageContainers[num];
-                    if (pageContainer) {
-                        pageContainer.innerHTML = '';
-                        pageContainer.appendChild(canvas);
-                        page.render(renderContext);
-
-                        pageContainer.removeEventListener('mousedown', onPageMouseDown);
-                        pageContainer.removeEventListener('click', onPageClick);
-
-                        pageContainer.addEventListener('mousedown', onPageMouseDown);
-                        pageContainer.addEventListener('click', onPageClick);
-                    }
-                });
             }
 
             document.addEventListener('keydown', (event) => {
@@ -598,7 +616,6 @@
                 document.addEventListener('mousemove', onMouseMove);
                 document.addEventListener('mouseup', onMouseUp);
             }
-
 
 
             function onCircleMouseDown(event) {
