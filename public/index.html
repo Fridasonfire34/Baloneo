@@ -17,7 +17,7 @@
 
 <body>
     <h1>Baloneo de dibujos</h1>
-    <h6>Compilado por Frida Gtz</h6>
+    <h6>Compilado por Frida Gtz.<br>TMP Manufacturing Co. 2024</h6>
 
     <input type="file" id="fileInput" accept="application/pdf" />
 
@@ -39,6 +39,9 @@
             <option value="7">7</option>
             <option value="8">8</option>
             <option value="10">10</option>
+            <option value="12">12</option>
+            <option value="14">14</option>
+            <option value="16">16</option>
         </select>
         <button id="undo">Deshacer</button>
         <button id="redo">Rehacer</button>
@@ -222,9 +225,6 @@
                     console.error('Error generating PDF:', error);
                 }
             });
-
-
-
 
             document.addEventListener('keydown', (event) => {
                 if (event.key === 'Backspace' || event.key === 'Delete') {
@@ -461,7 +461,7 @@
                 circle.style.top = `${y - selectedRadius}px`;
                 circle.style.position = 'absolute';
                 circle.style.lineHeight = `${selectedRadius * 2}px`;
-                circle.style.fontSize = `${selectedRadius}px`;
+                circle.style.fontSize = `${selectedFontSize}px`;
                 circle.setAttribute('data-border', '');
 
                 container.appendChild(circle);
@@ -616,7 +616,6 @@
                 document.addEventListener('mousemove', onMouseMove);
                 document.addEventListener('mouseup', onMouseUp);
             }
-
 
             function onCircleMouseDown(event) {
                 if (!isEditingEnabled) return;
