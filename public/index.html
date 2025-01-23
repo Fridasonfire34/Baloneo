@@ -49,7 +49,7 @@
         <div id="prevNextContainer">
             <span id="pageInfo"></span>
         </div>
-        <button id="save">Guardar archivo</button>
+        <button id="save">Vista Previa</button>
     </div>
 
     <div id="pdfContainer">
@@ -181,8 +181,6 @@
                 const scaleFactor = 5;
                 const containers = document.querySelectorAll('.page-container');
 
-                const pdfFileName = window.pdfFileName ? window.pdfFileName.replace('.pdf', '_modified.pdf') : 'generated_modified.pdf';
-
                 let pdf;
 
                 try {
@@ -220,11 +218,13 @@
                         pdf.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight);
                     }
 
-                    pdf.save(pdfFileName);
+                    pdf.output('dataurlnewwindow');
                 } catch (error) {
                     console.error('Error generating PDF:', error);
                 }
             });
+
+
 
             document.addEventListener('keydown', (event) => {
                 if (event.key === 'Backspace' || event.key === 'Delete') {
@@ -282,6 +282,42 @@
                         });
                     };
                     fileReader.readAsArrayBuffer(file);
+                } else {
+                    alert('Please select a valid PDF file.');
+                }
+            });
+
+            fileInput.addEventListener('change', (event) => {
+                const file = event.target.files[0];
+                if (file && file.type === 'application/pdf') {
+                    const fileReader = new FileReader();
+                    fileReader.onload = function (e) {
+                        const typedarray = new Uint8Array(e.target.result);
+                        pdfjsLib.getDocument(typedarray).promise.then(pdf => {
+                            pdfDoc = pdf;
+                            totalPages = pdf.numPages;
+
+                            pdfContainer.innerHTML = '';
+                            pageContainers = [];
+
+                            for (let i = 1; i <= totalPages; i++) {
+                                const pageContainer = document.createElement('div');
+                                pageContainer.classList.add('page-container');
+                                pageContainer.style.position = 'relative';
+                                pageContainer.style.marginBottom = '20px';
+                                pageContainer.style.border = '1px solid #ccc';
+                                pageContainer.style.padding = '1px';
+                                pdfContainer.appendChild(pageContainer);
+                                pageContainers[i] = pageContainer;
+
+                                renderPage(i);
+                            }
+                        });
+                    };
+                    fileReader.readAsArrayBuffer(file);
+
+                    const pdfFileName = file.name;
+                    window.pdfFileName = pdfFileName;
                 } else {
                     alert('Please select a valid PDF file.');
                 }
@@ -397,42 +433,6 @@
                     toggleUndoRedoButtons();
                 }
             }
-
-            fileInput.addEventListener('change', (event) => {
-                const file = event.target.files[0];
-                if (file && file.type === 'application/pdf') {
-                    const fileReader = new FileReader();
-                    fileReader.onload = function (e) {
-                        const typedarray = new Uint8Array(e.target.result);
-                        pdfjsLib.getDocument(typedarray).promise.then(pdf => {
-                            pdfDoc = pdf;
-                            totalPages = pdf.numPages;
-
-                            pdfContainer.innerHTML = '';
-                            pageContainers = [];
-
-                            for (let i = 1; i <= totalPages; i++) {
-                                const pageContainer = document.createElement('div');
-                                pageContainer.classList.add('page-container');
-                                pageContainer.style.position = 'relative';
-                                pageContainer.style.marginBottom = '20px';
-                                pageContainer.style.border = '1px solid #ccc';
-                                pageContainer.style.padding = '1px';
-                                pdfContainer.appendChild(pageContainer);
-                                pageContainers[i] = pageContainer;
-
-                                renderPage(i);
-                            }
-                        });
-                    };
-                    fileReader.readAsArrayBuffer(file);
-
-                    const pdfFileName = file.name;
-                    window.pdfFileName = pdfFileName;
-                } else {
-                    alert('Please select a valid PDF file.');
-                }
-            });
 
             function drawCircle(x, y, number, container) {
                 if (!allowInsert) {
